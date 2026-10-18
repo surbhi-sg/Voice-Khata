@@ -1,4 +1,4 @@
-import datetime, hashlib
+import datetime, hashlib, io, wave
 from html import escape
 import pandas as pd
 import streamlit as st
@@ -276,11 +276,27 @@ def render_ledger(lang, user):
                 st.rerun()
 
 
+def pad_wav(data, ms=600):
+    """Add a little silence before the voice so the browser's autoplay doesn't clip the first words."""
+    try:
+        with wave.open(io.BytesIO(data)) as w:
+            params, frames = w.getparams(), w.readframes(w.getnframes())
+        fill = b"\x80" if params.sampwidth == 1 else b"\x00"
+        silence = fill * (int(params.framerate * ms / 1000) * params.nchannels * params.sampwidth)
+        out = io.BytesIO()
+        with wave.open(out, "wb") as o:
+            o.setparams(params)
+            o.writeframes(silence + frames)
+        return out.getvalue()
+    except Exception:                       # not a plain WAV: play it as it is
+        return data
+
+
 def speak(make_text, lang):
     try:
-        return tts(make_text(lang), TTS_CODE[lang])
+        return pad_wav(tts(make_text(lang), TTS_CODE[lang]))
     except Exception:                       # voice can't do this language: use Hindi
-        return tts(make_text("hi"), "hi-IN")
+        return pad_wav(tts(make_text("hi"), "hi-IN"))
 
 
 st.set_page_config(page_title="Voice Khata", layout="centered")
