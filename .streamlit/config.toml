@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+primaryColor = "#0F172A"       # Deep slate anchor
+backgroundColor = "#FAFAFA"    # Soft crisp off-white canvas
+secondaryBackgroundColor = "#FFFFFF"  # Pure white card elements
+textColor = "#0F172A"          # High contrast dark text
+font = "sans serif"
