@@ -69,7 +69,7 @@ CSS = """
 /* phone: stack brand above language selector so they never overlap */
 @media (max-width: 640px) {
     .st-key-nav {position: static; margin-bottom: 16px;}
-    .st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap: wrap !important; row-gap: 10px;}
+    .st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap: wrap !important; row-gap: 16px;}
     .st-key-nav [data-testid="stColumn"] {flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important;}
     .st-key-nav [data-testid="stColumn"]:last-child [data-testid="stElementContainer"] {justify-content: flex-start;}
     .vk-name {font-size: 1.1rem;}
