@@ -1,5 +1,7 @@
-import os, re, datetime
+import datetime
 import pandas as pd
+import streamlit as st
+from supabase import create_client
 
 COLS = ["time", "type", "customer", "item", "qty", "amount", "heard"]
 
@@ -20,25 +22,44 @@ SUMMARY = {
 }
 
 
-def _file(user):
-    # each user gets their own CSV; strip anything unsafe from the name
-    safe = re.sub(r"[^a-z0-9_]", "", str(user).lower()) or "guest"
-    return f"khata_{safe}.csv"
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
-def load(user):
-    f = _file(user)
-    if not os.path.exists(f):
-        return pd.DataFrame(columns=COLS)
-    return pd.read_csv(f).fillna("")
+def now_ist():
+    return datetime.datetime.now(IST)
 
 
-def add(e, user):
-    f = _file(user)
-    row = {"time": datetime.datetime.now().isoformat(timespec="seconds"),
-           "type": e["type"], "customer": e["customer"], "item": e["item"],
-           "qty": e["qty"], "amount": e["amount"], "heard": e.get("heard", "")}
-    pd.DataFrame([row]).to_csv(f, mode="a", header=not os.path.exists(f), index=False)
+def today_ist():
+    return now_ist().date()
+
+
+def client():
+    """One Supabase client per browser session, so one user's login never leaks to another."""
+    if "sb" not in st.session_state:
+        st.session_state["sb"] = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    return st.session_state["sb"]
+
+
+def load(user=None):
+    sb = client()
+    sb.auth.get_session()                      # refreshes the login token if it expired
+    res = sb.table("entries").select(",".join(COLS)).order("id").limit(10000).execute()
+    return pd.DataFrame(res.data, columns=COLS).fillna("")
+
+
+def add(e, user=None):
+    sb = client()
+    sb.auth.get_session()
+    amount = e["amount"]
+    sb.table("entries").insert({
+        "time": now_ist().replace(tzinfo=None).isoformat(timespec="seconds"),
+        "type": e["type"],
+        "customer": e["customer"] or "",
+        "item": e["item"] or "",
+        "qty": "" if e["qty"] is None else str(e["qty"]),
+        "amount": 0 if amount is None else float(amount),
+        "heard": e.get("heard", "") or "",
+    }).execute()     # user_id is filled in by the database from the logged-in user
 
 
 def show(lang, user):
@@ -69,7 +90,7 @@ def summary_text(lang="hi", user="guest"):
     if df.empty:
         return s_empty
     df["amount"] = df["amount"].astype(float)
-    today = df[df["time"].str.startswith(datetime.date.today().isoformat())]
+    today = df[df["time"].str.startswith(today_ist().isoformat())]
     sale = today[today["type"] == "sale"]["amount"].sum()
     udh = today[today["type"] == "udhaar"]["amount"].sum()
 

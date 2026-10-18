@@ -1,10 +1,10 @@
-import datetime, hashlib, hmac
+import datetime, hashlib
 from html import escape
 import pandas as pd
 import streamlit as st
 from gnani import stt, tts
 from khata_parser import parse, is_sure
-from ledger import load, add, confirm_text, summary_text, TYPE, HEAD
+from ledger import load, add, confirm_text, summary_text, client, today_ist, TYPE, HEAD
 
 STT_CODE = {"hi": "hi-IN", "hl": "hi-IN", "en": "en-IN"}
 TTS_CODE = {"hi": "hi-IN", "hl": "en-hi-IN-latn", "en": "en-IN"}
@@ -174,7 +174,7 @@ def today_totals(user):
     d = df.copy()
     d["_d"] = pd.to_datetime(d["time"], errors="coerce").dt.date
     d["_a"] = pd.to_numeric(d["amount"], errors="coerce").fillna(0)
-    d = d[d["_d"] == datetime.date.today()]
+    d = d[d["_d"] == today_ist()]
     return (d.loc[d["type"] == "udhaar", "_a"].sum(),
             d.loc[d["type"] == "sale", "_a"].sum())
 
@@ -228,27 +228,57 @@ def speak(make_text, lang):
 st.set_page_config(page_title="Voice Khata", layout="centered")
 st.markdown(CSS, unsafe_allow_html=True)
 
-# ---------- LOGIN GATE (each user only ever sees their own ledger) ----------
+# ---------- LOGIN / SIGN UP (Supabase Auth; each user only sees their own ledger) ----------
 def login_gate():
     if st.session_state.get("user"):
         return st.session_state["user"]
 
     st.markdown('<div class="vk-brand" style="margin:48px 0 20px"><span class="vk-logo">₹</span>'
                 '<span class="vk-name">Voice Khata</span></div>', unsafe_allow_html=True)
-    with st.form("login"):
-        name = st.text_input("Username").strip().lower()
-        pw = st.text_input("Password", type="password")
-        ok = st.form_submit_button("Login", type="primary")
-    if ok:
-        try:
-            users = {str(k).lower(): str(v) for k, v in st.secrets["users"].items()}
-        except Exception:
-            st.error("No users configured. Add a [users] section in Streamlit secrets.")
-            st.stop()
-        if name in users and hmac.compare_digest(users[name], pw):
-            st.session_state["user"] = name
-            st.rerun()
-        st.error("Wrong username or password")
+    sb = client()
+    tab_in, tab_up = st.tabs(["Login", "Sign up"])
+
+    with tab_in:
+        with st.form("login"):
+            email = st.text_input("Email").strip().lower()
+            pw = st.text_input("Password", type="password")
+            ok = st.form_submit_button("Login", type="primary")
+        if ok:
+            who = None
+            try:
+                who = sb.auth.sign_in_with_password({"email": email, "password": pw}).user.email
+            except Exception:
+                st.error("Wrong email or password")
+            if who:
+                st.session_state["user"] = who
+                st.rerun()
+
+    with tab_up:
+        with st.form("signup"):
+            email2 = st.text_input("Email", key="su_email").strip().lower()
+            pw2 = st.text_input("Password (min 6 characters)", type="password", key="su_pw")
+            pw3 = st.text_input("Confirm password", type="password", key="su_pw2")
+            ok2 = st.form_submit_button("Create account", type="primary")
+        if ok2:
+            who = None
+            if "@" not in email2:
+                st.error("Enter a valid email")
+            elif len(pw2) < 6:
+                st.error("Password must be at least 6 characters")
+            elif pw2 != pw3:
+                st.error("Passwords do not match")
+            else:
+                try:
+                    res = sb.auth.sign_up({"email": email2, "password": pw2})
+                    if res.session:
+                        who = res.user.email
+                    else:
+                        st.info("Account created. Check your email to confirm it, then log in.")
+                except Exception as ex:
+                    st.error(f"Could not create account: {ex}")
+            if who:
+                st.session_state["user"] = who
+                st.rerun()
     st.stop()
 
 
@@ -342,5 +372,9 @@ st.markdown(ledger_html(lang, user), unsafe_allow_html=True)
 st.write("")
 st.caption(f"Logged in as {user}")
 if st.button("Logout"):
+    try:
+        client().auth.sign_out()
+    except Exception:
+        pass
     st.session_state.clear()
     st.rerun()
