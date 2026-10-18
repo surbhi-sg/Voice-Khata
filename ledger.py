@@ -62,6 +62,22 @@ def add(e, user=None):
     }).execute()     # user_id is filled in by the database from the logged-in user
 
 
+def recent(user=None, n=20):
+    """Newest-first rows including their ids (used by the delete picker)."""
+    sb = client()
+    sb.auth.get_session()
+    res = sb.table("entries").select("id," + ",".join(COLS)).order("id", desc=True).limit(n).execute()
+    return res.data
+
+
+def delete(entry_id, user=None):
+    """Delete one of the logged-in user's entries. Returns True if a row was removed."""
+    sb = client()
+    sb.auth.get_session()
+    res = sb.table("entries").delete().eq("id", entry_id).execute()
+    return bool(res.data)
+
+
 def show(lang, user):
     df = load(user).tail(20).iloc[::-1].copy()
     df["type"] = df["type"].map(TYPE[lang])
