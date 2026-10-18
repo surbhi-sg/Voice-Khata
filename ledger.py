@@ -1,7 +1,6 @@
-import os, datetime
+import os, re, datetime
 import pandas as pd
 
-FILE = "khata.csv"
 COLS = ["time", "type", "customer", "item", "qty", "amount", "heard"]
 
 TYPE = {
@@ -21,21 +20,29 @@ SUMMARY = {
 }
 
 
-def load():
-    if not os.path.exists(FILE):
+def _file(user):
+    # each user gets their own CSV; strip anything unsafe from the name
+    safe = re.sub(r"[^a-z0-9_]", "", str(user).lower()) or "guest"
+    return f"khata_{safe}.csv"
+
+
+def load(user):
+    f = _file(user)
+    if not os.path.exists(f):
         return pd.DataFrame(columns=COLS)
-    return pd.read_csv(FILE).fillna("")
+    return pd.read_csv(f).fillna("")
 
 
-def add(e):
+def add(e, user):
+    f = _file(user)
     row = {"time": datetime.datetime.now().isoformat(timespec="seconds"),
            "type": e["type"], "customer": e["customer"], "item": e["item"],
            "qty": e["qty"], "amount": e["amount"], "heard": e.get("heard", "")}
-    pd.DataFrame([row]).to_csv(FILE, mode="a", header=not os.path.exists(FILE), index=False)
+    pd.DataFrame([row]).to_csv(f, mode="a", header=not os.path.exists(f), index=False)
 
 
-def show(lang):
-    df = load().tail(20).iloc[::-1].copy()
+def show(lang, user):
+    df = load(user).tail(20).iloc[::-1].copy()
     df["type"] = df["type"].map(TYPE[lang])
     df.columns = HEAD[lang]
     return df
@@ -56,9 +63,9 @@ def confirm_text(e, lang="hi"):
             "sale": f"Sale of {a} rupees recorded"}[k]
 
 
-def summary_text(lang="hi"):
+def summary_text(lang="hi", user="guest"):
     s_sale, s_udh, s_bal, s_empty = SUMMARY[lang]
-    df = load()
+    df = load(user)
     if df.empty:
         return s_empty
     df["amount"] = df["amount"].astype(float)

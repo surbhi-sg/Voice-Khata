@@ -1,4 +1,4 @@
-import datetime, hashlib
+import datetime, hashlib, hmac
 from html import escape
 import pandas as pd
 import streamlit as st
@@ -166,9 +166,9 @@ def money(v):
     return "₹" + f"{float(v):,.2f}".rstrip("0").rstrip(".")
 
 
-def today_totals():
+def today_totals(user):
     """(credit given today, sales today) taken from the saved ledger."""
-    df = load()
+    df = load(user)
     if df is None or df.empty:
         return 0, 0
     d = df.copy()
@@ -179,8 +179,8 @@ def today_totals():
             d.loc[d["type"] == "sale", "_a"].sum())
 
 
-def kpi_html(u):
-    credit, cash = today_totals()
+def kpi_html(u, user):
+    credit, cash = today_totals(user)
     return (f'<div class="vk-kpis">'
             f'<div class="vk-kpi amber"><div class="vk-kpi-top"><span class="vk-kpi-l">{u["k_credit"]}</span>'
             f'<span class="vk-kpi-tag">{u["k_today"]}</span></div><div class="vk-kpi-v">{money(credit)}</div></div>'
@@ -202,8 +202,8 @@ def heard_card(text, e, pending, u, lang):
             f'<span class="amt">{amount}</span></div></div>')
 
 
-def ledger_html(lang):
-    df = load().tail(20).iloc[::-1]
+def ledger_html(lang, user):
+    df = load(user).tail(20).iloc[::-1]
     cls = ["", "", "", "", "", ' class="num"']
     head = "".join(f"<th{c}>{h}</th>" for c, h in zip(cls, HEAD[lang][:6]))
     rows = ""
@@ -227,6 +227,33 @@ def speak(make_text, lang):
 
 st.set_page_config(page_title="Voice Khata", layout="centered")
 st.markdown(CSS, unsafe_allow_html=True)
+
+# ---------- LOGIN GATE (each user only ever sees their own ledger) ----------
+def login_gate():
+    if st.session_state.get("user"):
+        return st.session_state["user"]
+
+    st.markdown('<div class="vk-brand" style="margin:48px 0 20px"><span class="vk-logo">₹</span>'
+                '<span class="vk-name">Voice Khata</span></div>', unsafe_allow_html=True)
+    with st.form("login"):
+        name = st.text_input("Username").strip().lower()
+        pw = st.text_input("Password", type="password")
+        ok = st.form_submit_button("Login", type="primary")
+    if ok:
+        try:
+            users = {str(k).lower(): str(v) for k, v in st.secrets["users"].items()}
+        except Exception:
+            st.error("No users configured. Add a [users] section in Streamlit secrets.")
+            st.stop()
+        if name in users and hmac.compare_digest(users[name], pw):
+            st.session_state["user"] = name
+            st.rerun()
+        st.error("Wrong username or password")
+    st.stop()
+
+
+user = login_gate()
+# ---------- END GATE ----------
 
 # ---------- navbar: brand + live tag on the left, language on the right ----------
 with st.container(key="nav"):
@@ -258,7 +285,7 @@ if audio:
             e["heard"] = text
             st.session_state.text, st.session_state.entry = text, e
             if is_sure(e):
-                add(e)
+                add(e, user)
                 st.session_state.pending = False
                 st.session_state.say = speak(lambda l: confirm_text(e, l), lang)
             else:
@@ -284,7 +311,7 @@ if st.session_state.get("pending"):
         item = c2.text_input(u["f_item"], e["item"])
         if st.form_submit_button(u["save"], type="primary") and amt > 0:
             fixed = {**e, "type": typ, "customer": cust, "item": item, "amount": amt}
-            add(fixed)
+            add(fixed, user)
             st.session_state.entry = fixed
             st.session_state.pending = False
             st.session_state.say = speak(lambda l: confirm_text(fixed, l), lang)
@@ -295,7 +322,7 @@ if say:
     st.audio(say, format="audio/wav", autoplay=True)
 
 # ---------- KPI cards (computed after any new entry is saved) ----------
-st.markdown(kpi_html(u), unsafe_allow_html=True)
+st.markdown(kpi_html(u, user), unsafe_allow_html=True)
 
 # ---------- ledger ----------
 st.write("")
@@ -304,9 +331,16 @@ c1.markdown(f'<div class="vk-h2">{u["table"]}</div>', unsafe_allow_html=True)
 show_sum = c2.button(u["sum_btn"], use_container_width=True)
 
 if show_sum:
-    s = summary_text(lang)
+    s = summary_text(lang, user)
     st.markdown(f'<div class="vk-card" style="font-size:1.1rem;font-weight:500">{escape(s)}</div>',
                 unsafe_allow_html=True)
-    st.audio(speak(lambda l: summary_text(l), lang), format="audio/wav", autoplay=True)
+    st.audio(speak(lambda l: summary_text(l, user), lang), format="audio/wav", autoplay=True)
 
-st.markdown(ledger_html(lang), unsafe_allow_html=True)
+st.markdown(ledger_html(lang, user), unsafe_allow_html=True)
+
+# ---------- account ----------
+st.write("")
+st.caption(f"Logged in as {user}")
+if st.button("Logout"):
+    st.session_state.clear()
+    st.rerun()
