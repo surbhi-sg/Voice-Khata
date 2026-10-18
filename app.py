@@ -66,6 +66,16 @@ CSS = """
 .st-key-nav [data-testid="stBaseButton-segmented_controlActive"],
 .st-key-nav button[kind="segmented_controlActive"] {background: #047857 !important; border-color: #047857 !important; color: #fff !important;}
 
+/* phone: stack brand above language selector so they never overlap */
+@media (max-width: 640px) {
+    .st-key-nav {position: static; margin-bottom: 16px;}
+    .st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap: wrap !important; row-gap: 10px;}
+    .st-key-nav [data-testid="stColumn"] {flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important;}
+    .st-key-nav [data-testid="stColumn"]:last-child [data-testid="stElementContainer"] {justify-content: flex-start;}
+    .vk-name {font-size: 1.1rem;}
+    .st-key-nav [data-testid="stButtonGroup"] button {font-size: .78rem; padding: 4px 10px;}
+}
+
 /* ---------- voice hero ---------- */
 .st-key-hero {position: relative; overflow: hidden; align-items: center; text-align: center;
     padding: 30px 20px 26px; border: 1px solid #E2E8F0; border-radius: 22px;
