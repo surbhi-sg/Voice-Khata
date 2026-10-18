@@ -409,7 +409,8 @@ if st.button("Logout"):
     except Exception:
         pass
     st.session_state.clear()
-    st.rerun()import datetime, hashlib
+    st.rerun()
+import datetime, hashlib
 from html import escape
 import pandas as pd
 import streamlit as st
