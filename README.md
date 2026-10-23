@@ -141,7 +141,6 @@ streamlit run app.py
 
 - [Gnani.ai](https://gnani.ai) for the Vachana speech APIs (Prisma STT and Timbre TTS)
 - [Supabase](https://supabase.com) and [Streamlit](https://streamlit.io)
-- Built with help from Claude
 
 ## Author
 
